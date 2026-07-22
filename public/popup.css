@@ -22,3 +22,9 @@ body {
   #result {
     margin-top: 16px;
   }
+
+  .series-row {
+    padding: 8px 0;
+    border-bottom: 1px solid #eee;
+    font-size: 13px;
+  }

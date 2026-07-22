@@ -8,26 +8,28 @@ Velog는 게시글별 조회수는 확인할 수 있지만, 시리즈 단위로 
 
 ## 동작 흐름
 
-1. `chrome.cookies`로 Velog 로그인 쿠키(`refresh_token`, httpOnly) 존재 여부 확인
-2. Velog GraphQL API(`https://v2.velog.io/graphql`)로 내 게시글 전체 목록 조회
-3. 게시글별 `GetStats` 요청으로 조회수 데이터 조회
-4. 게시글과 조회수 결합, 각 게시글의 `series` 정보로 매핑
-5. `series.id` 기준으로 게시글 그룹화
-6. 시리즈별 총조회수 및 평균 조회수 계산
+1. `chrome.tabs`로 열려있는 velog.io 탭을 찾거나 없으면 새로 엶
+2. `chrome.scripting.executeScript`로 그 탭 안에 GraphQL 요청 코드를 주입해서 실행 (Origin이 실제로 `https://velog.io`가 되도록)
+3. `auth` 쿼리로 로그인한 사용자의 username 확인
+4. Velog GraphQL API로 내 게시글 전체 목록, 시리즈 목록, 게시글-시리즈 매핑 조회
+5. 게시글별 `GetStats` 요청으로 조회수 데이터 조회 (5개씩 배치 처리)
+6. `series.id` 기준으로 게시글 그룹화, 시리즈별 총조회수 및 평균 조회수 계산
 7. 팝업 화면에 결과 렌더링
 
 서버 없이 확장 프로그램 내부에서 모든 과정이 완결되도록 설계합니다 (별도 백엔드 없음).
+
+**왜 탭에 스크립트를 주입하는가:** 확장 프로그램 팝업(`chrome-extension://...` origin)에서 직접 `https://v3.velog.io/graphql`로 fetch하면 CORS는 `host_permissions`로 통과하더라도, 서버가 Origin을 보고 빈 응답(200 + 빈 body)을 준다. 실제 velog.io 페이지 안에서 실행되는 코드는 진짜 `https://velog.io` Origin을 가지므로 정상적으로 응답을 받는다.
 
 ## 확인된 Velog GraphQL API 구조
 
 velog.io 개발자도구 Network 탭에서 직접 확인한 실제 요청 구조입니다.
 
-| 용도 | operationName | 핵심 필드 |
-|---|---|---|
-| 게시글 목록 | `velogPosts` | `id, title, url_slug, tags, released_at, updated_at, comments_count, likes, is_private` (시리즈 필드는 없음) |
-| 시리즈 목록 | `getUserSeriesList` | `id, name, url_slug, posts_count` |
-| 게시글-시리즈 연결 | 게시글 상세 조회 시 `series` 필드 포함 | `series { id, name, url_slug, series_posts { id, post { id } } }` |
-| 조회수 | `GetStats` | `total, count_by_day { count, day }` |
+| 용도               | operationName                           | 핵심 필드                                                                                                      |
+| ------------------ | --------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| 게시글 목록        | `velogPosts`                          | `id, title, url_slug, tags, released_at, updated_at, comments_count, likes, is_private` (시리즈 필드는 없음) |
+| 시리즈 목록        | `getUserSeriesList`                   | `id, name, url_slug, posts_count`                                                                            |
+| 게시글-시리즈 연결 | 게시글 상세 조회 시`series` 필드 포함 | `series { id, name, url_slug, series_posts { id, post { id } } }`                                            |
+| 조회수             | `GetStats`                            | `total, count_by_day { count, day }`                                                                         |
 
 ```graphql
 query GetStats($post_id: ID!) {
@@ -80,8 +82,8 @@ velog-series-stats/
 
 ## 개발 현황
 
-- [x] 최소 Chrome 확장 프로그램 스켈레톤 구축 및 로드 확인 ([#1](https://github.com/doHoaSen/Velog-Series-Stats/issues/1))
-- [x] Velog GraphQL API 구조 조사 (게시글 목록, 시리즈 목록, 게시글-시리즈 연결, 조회수)
+- [X] 최소 Chrome 확장 프로그램 스켈레톤 구축 및 로드 확인 ([#1](https://github.com/doHoaSen/Velog-Series-Stats/issues/1))
+- [X] Velog GraphQL API 구조 조사 (게시글 목록, 시리즈 목록, 게시글-시리즈 연결, 조회수)
 - [ ] `src/model/*.ts` 타입 정의 작성
 - [ ] `src/api/*.ts` GraphQL 클라이언트 및 요청 함수 작성
 - [ ] `src/service/seriesAggregator.ts` 집계 로직 작성
