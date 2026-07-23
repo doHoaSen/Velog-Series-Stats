@@ -3,10 +3,9 @@
     "name": "Velog Series Stats",
     "version": "0.1.0",
     "description": "Velog 게시글 조회수를 시리즈별로 집계합니다.",
-    "permissions": ["cookies", "storage"],
+    "permissions": ["storage", "scripting", "tabs"],
     "host_permissions": [
-      "https://velog.io/*",
-      "https://v2.velog.io/*"
+      "https://velog.io/*"
     ],
     "background": {
       "service_worker": "background.js"
