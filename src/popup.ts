@@ -1,14 +1,11 @@
 import { fetchCurrentUser } from "./api/userApi";
 import { fetchSeriesOverview, loadSeriesViews } from "./service/seriesAggregator";
 import type { SeriesStats } from "./service/seriesAggregator";
-import { loadCachedSeriesStats, saveCachedSeriesStats } from "./service/statsCache";
+import { loadCachedSeriesStats, saveCachedSeriesStats, isCacheFresh } from "./service/statsCache";
 import type { CachedSeriesStats } from "./service/statsCache";
+import { formatRelativeTime } from "./utils/time";
 
 type SortMode = "postCount" | "totalViews";
-
-// 캐시가 이 시간보다 신선하면 백그라운드 재조회를 생략한다 — 방금 불러온 결과를
-// 팝업을 열 때마다 매번 무겁게 다시 조회하는 걸 방지하기 위함.
-const CACHE_FRESH_THRESHOLD_MS = 5 * 60 * 1000;
 
 const statusElement = document.querySelector<HTMLParagraphElement>("#status");
 const loadButton = document.querySelector<HTMLButtonElement>("#load-button");
@@ -59,8 +56,7 @@ async function initFromCache(): Promise<void> {
   statusElement.textContent = `${cached.username}님의 시리즈별 조회수 (${formatRelativeTime(cached.cachedAt)} 기준)`;
   render();
 
-  const cacheAge = Date.now() - cached.cachedAt;
-  if (cacheAge < CACHE_FRESH_THRESHOLD_MS) return;
+  if (isCacheFresh(cached.cachedAt)) return;
 
   void refreshInBackground(cached);
 }
@@ -96,18 +92,6 @@ async function refreshInBackground(cached: CachedSeriesStats): Promise<void> {
   } finally {
     loadButton.disabled = false;
   }
-}
-
-function formatRelativeTime(timestamp: number): string {
-  const diffMinutes = Math.floor((Date.now() - timestamp) / 60000);
-
-  if (diffMinutes < 1) return "방금";
-  if (diffMinutes < 60) return `${diffMinutes}분 전`;
-
-  const diffHours = Math.floor(diffMinutes / 60);
-  if (diffHours < 24) return `${diffHours}시간 전`;
-
-  return `${Math.floor(diffHours / 24)}일 전`;
 }
 
 async function loadSeriesStats(): Promise<void> {
