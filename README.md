@@ -54,11 +54,13 @@ query GetStatsBatch($id0: ID!, $id1: ID!) {
 }
 ```
 
+**커넥션 풀 타임아웃 재시도:** 배치 크기를 조정해도, velog 탭을 새로 여는 시점엔 페이지 자신의 초기화 요청과 겹쳐 커넥션 풀이 일시적으로 고갈될 수 있습니다. 이런 경우까지 완전히 막을 순 없어서, `requestVelogGraphql`(`src/api/graphqlClient.ts`)이 에러 메시지에 `"connection pool"`이 포함된 경우에만 짧게 대기 후 최대 2회 재시도합니다. 자세한 배경은 `docs/devlog/260727-*.md` 참고.
+
 ## 기술 스택
 
 - **TypeScript** — Chrome 확장 프로그램(Manifest V3) 개발 및 Velog GraphQL 응답 타입 안전성 확보
 - **esbuild** — 번들링
-- **Chrome Extension Manifest V3** — `service_worker` 기반 백그라운드, `cookies` / `storage` 권한 사용
+- **Chrome Extension Manifest V3** — `service_worker` 기반 백그라운드, `scripting` / `tabs` / `storage` 권한 사용
 - 프레임워크 없는 순수 DOM 조작 (초기 버전 기준, React 미사용)
 
 ## 프로젝트 구조
@@ -75,11 +77,14 @@ velog-series-stats/
 │   ├── api/
 │   │   ├── graphqlClient.ts
 │   │   ├── postApi.ts
-│   │   └── statsApi.ts
+│   │   ├── seriesApi.ts
+│   │   ├── statsApi.ts
+│   │   └── userApi.ts
 │   ├── model/
 │   │   ├── post.ts
 │   │   ├── series.ts
-│   │   └── stats.ts
+│   │   ├── stats.ts
+│   │   └── user.ts
 │   └── service/
 │       └── seriesAggregator.ts
 ├── scripts/
@@ -93,10 +98,10 @@ velog-series-stats/
 
 - [X] 최소 Chrome 확장 프로그램 스켈레톤 구축 및 로드 확인 ([#1](https://github.com/doHoaSen/Velog-Series-Stats/issues/1))
 - [X] Velog GraphQL API 구조 조사 (게시글 목록, 시리즈 목록, 게시글-시리즈 연결, 조회수)
-- [ ] `src/model/*.ts` 타입 정의 작성
-- [ ] `src/api/*.ts` GraphQL 클라이언트 및 요청 함수 작성
-- [ ] `src/service/seriesAggregator.ts` 집계 로직 작성
-- [ ] 팝업에 결과 출력
+- [X] 데이터 파이프라인 구현 — 모델 타입, GraphQL 클라이언트/요청 함수, 집계 로직, 팝업 결과 출력 ([#3](https://github.com/doHoaSen/Velog-Series-Stats/issues/3), PR #4)
+- [X] 조회수 로딩 성능 개선 + 정렬 UI + 로딩 마이크로 인터랙션 ([#5](https://github.com/doHoaSen/Velog-Series-Stats/issues/5), PR #6)
+- [ ] 세션 간 캐싱 (`chrome.storage`에 이전 결과 저장 후 재실행 시 즉시 표시)
+- [ ] 시리즈별 지연 로딩 UI (특정 시리즈만 선택해서 조회수 조회)
 
 ## 빌드
 
