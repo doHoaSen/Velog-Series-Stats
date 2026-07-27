@@ -11,6 +11,13 @@ const NO_SERIES_NAME = "시리즈 없음";
 // 실제로 "Timed out fetching a new connection from the connection pool" 에러를 유발함 — 2026-07-23 확인)
 const STATS_POST_BATCH_SIZE = 5;
 const STATS_BATCH_CONCURRENCY = 1;
+// 시리즈 상세 조회(fetchSeriesPosts)도 시리즈 개수만큼 한꺼번에 Promise.all로 날리면
+// (예: 시리즈 9개 → 동시 요청 9개) 요청마다 붙는 인증 조회(user.findUnique)까지 겹쳐
+// 커넥션 풀 한도(5)를 넘길 수 있다. 풀 한도는 우리 확장 프로그램 전용이 아니라 Velog
+// 서버 전체가 공유하므로 한도(5)를 꽉 채우지 않고 1개 여유를 두어 4로 설정.
+// (2026-07-27, GetStats가 아닌 user.findUnique에서 동일한
+// "Timed out fetching a new connection from the connection pool" 에러로 확인)
+const SERIES_DETAIL_CONCURRENCY = 4;
 
 export interface SeriesStats {
   seriesId: string | null;
@@ -77,15 +84,18 @@ async function mapPostIdsToSeriesIds(
   seriesList: VelogSeries[],
 ): Promise<Map<string, string>> {
   const postIdToSeriesId = new Map<string, string>();
+  const seriesBatches = chunk(seriesList, SERIES_DETAIL_CONCURRENCY);
 
-  const seriesDetails = await Promise.all(
-    seriesList.map((series) => fetchSeriesPosts(username, series.url_slug)),
-  );
+  for (const batch of seriesBatches) {
+    const seriesDetails = await Promise.all(
+      batch.map((series) => fetchSeriesPosts(username, series.url_slug)),
+    );
 
-  for (const series of seriesDetails) {
-    if (!series) continue;
-    for (const seriesPost of series.series_posts) {
-      postIdToSeriesId.set(seriesPost.post.id, series.id);
+    for (const series of seriesDetails) {
+      if (!series) continue;
+      for (const seriesPost of series.series_posts) {
+        postIdToSeriesId.set(seriesPost.post.id, series.id);
+      }
     }
   }
 
