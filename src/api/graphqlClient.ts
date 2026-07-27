@@ -19,7 +19,33 @@ interface GraphqlResponse<TData> {
   errors?: Array<{ message: string }>;
 }
 
+const CONNECTION_POOL_ERROR_PATTERN = /connection pool/i;
+const RETRY_DELAYS_MS = [500, 1500];
+
 export async function requestVelogGraphql<TData, TVariables>(
+  request: GraphqlRequestBody<TVariables>,
+): Promise<TData> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await performGraphqlRequest<TData, TVariables>(request);
+    } catch (error) {
+      const isConnectionPoolError =
+        error instanceof Error && CONNECTION_POOL_ERROR_PATTERN.test(error.message);
+      const delayMs = RETRY_DELAYS_MS[attempt];
+
+      // 콜드 스타트로 velog 탭을 새로 띄운 직후엔 velog 페이지 자체의 초기화 요청과
+      // 우리 요청이 겹쳐 서버 커넥션 풀(한도 5)이 일시적으로 고갈될 수 있다 (2026-07-27 확인).
+      // 이런 일시적 타임아웃일 때만 짧게 기다렸다가 재시도한다.
+      if (!isConnectionPoolError || delayMs === undefined) {
+        throw error;
+      }
+
+      await delay(delayMs);
+    }
+  }
+}
+
+async function performGraphqlRequest<TData, TVariables>(
   request: GraphqlRequestBody<TVariables>,
 ): Promise<TData> {
   const tabId = await findOrCreateVelogTab();
@@ -54,6 +80,10 @@ export async function requestVelogGraphql<TData, TVariables>(
   }
 
   return json.data;
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function findOrCreateVelogTab(): Promise<number> {
