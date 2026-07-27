@@ -1,12 +1,16 @@
 import { fetchAllMyPosts } from "../api/postApi";
 import { fetchMySeriesList, fetchSeriesPosts } from "../api/seriesApi";
-import { fetchPostStats } from "../api/statsApi";
+import { fetchPostStatsBatch } from "../api/statsApi";
 import type { VelogPost } from "../model/post";
 import type { VelogSeries } from "../model/series";
 
 const NO_SERIES_KEY = "__NO_SERIES__";
 const NO_SERIES_NAME = "시리즈 없음";
-const STATS_CONCURRENCY = 5;
+// alias 배치 크기를 서버 Prisma 커넥션 풀 한도(5)에 맞춰 30 → 5로,
+// 배치 동시 실행도 5 → 1(순차)로 낮췄다. (30개 alias × 배치 5개 동시 처리 조합이
+// 실제로 "Timed out fetching a new connection from the connection pool" 에러를 유발함 — 2026-07-23 확인)
+const STATS_POST_BATCH_SIZE = 5;
+const STATS_BATCH_CONCURRENCY = 1;
 
 export interface SeriesStats {
   seriesId: string | null;
@@ -14,9 +18,19 @@ export interface SeriesStats {
   postCount: number;
   totalViews: number;
   averageViews: number;
+  // totalViews=0만으로는 '진짜 조회수 0'과 '아직 안 불러옴'을 구분할 수 없어 별도 플래그로 로딩 상태를 표시한다.
+  viewsLoaded: boolean;
 }
 
-export async function aggregateSeriesStats(username: string): Promise<SeriesStats[]> {
+export interface SeriesOverview {
+  posts: VelogPost[];
+  seriesList: VelogSeries[];
+  postIdToSeriesId: Map<string, string>;
+  seriesStats: SeriesStats[];
+}
+
+// 조회수 없이 시리즈 목록(게시글 수)부터 먼저 보여줄 수 있도록 조회 단계와 조회수 집계 단계를 분리했다.
+export async function fetchSeriesOverview(username: string): Promise<SeriesOverview> {
   const postsAndSeriesStart = performance.now();
   const [posts, seriesList] = await Promise.all([
     fetchAllMyPosts(username),
@@ -32,8 +46,25 @@ export async function aggregateSeriesStats(username: string): Promise<SeriesStat
     `[VelogSeriesStats] 게시글-시리즈 매핑: ${(performance.now() - mappingStart).toFixed(0)}ms`,
   );
 
+  const seriesStats = groupBySeries(posts, seriesList, postIdToSeriesId, new Map());
+
+  return { posts, seriesList, postIdToSeriesId, seriesStats };
+}
+
+export async function loadSeriesViews(
+  overview: SeriesOverview,
+  onProgress?: (seriesStats: SeriesStats[], loadedPostCount: number) => void,
+): Promise<SeriesStats[]> {
+  const { posts, seriesList, postIdToSeriesId } = overview;
   const statsStart = performance.now();
-  const viewsByPostId = await fetchViewsForPosts(posts);
+
+  const viewsByPostId = await fetchViewsForPosts(posts, (partialViews) => {
+    onProgress?.(
+      groupBySeries(posts, seriesList, postIdToSeriesId, partialViews),
+      partialViews.size,
+    );
+  });
+
   console.log(
     `[VelogSeriesStats] 조회수 조회 (${posts.length}개 게시글): ${(performance.now() - statsStart).toFixed(0)}ms`,
   );
@@ -61,19 +92,39 @@ async function mapPostIdsToSeriesIds(
   return postIdToSeriesId;
 }
 
-async function fetchViewsForPosts(posts: VelogPost[]): Promise<Map<string, number>> {
+async function fetchViewsForPosts(
+  posts: VelogPost[],
+  onBatch?: (viewsSoFar: Map<string, number>) => void,
+): Promise<Map<string, number>> {
   const viewsByPostId = new Map<string, number>();
+  const idBatches = chunk(
+    posts.map((post) => post.id),
+    STATS_POST_BATCH_SIZE,
+  );
 
-  for (let i = 0; i < posts.length; i += STATS_CONCURRENCY) {
-    const batch = posts.slice(i, i + STATS_CONCURRENCY);
-    const statsBatch = await Promise.all(batch.map((post) => fetchPostStats(post.id)));
+  for (let i = 0; i < idBatches.length; i += STATS_BATCH_CONCURRENCY) {
+    const round = idBatches.slice(i, i + STATS_BATCH_CONCURRENCY);
 
-    batch.forEach((post, index) => {
-      viewsByPostId.set(post.id, statsBatch[index]?.total ?? 0);
-    });
+    await Promise.all(
+      round.map(async (idBatch) => {
+        const batchViews = await fetchPostStatsBatch(idBatch);
+        for (const [postId, total] of batchViews) {
+          viewsByPostId.set(postId, total);
+        }
+        onBatch?.(viewsByPostId);
+      }),
+    );
   }
 
   return viewsByPostId;
+}
+
+function chunk<T>(items: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size));
+  }
+  return chunks;
 }
 
 function groupBySeries(
@@ -98,6 +149,7 @@ function groupBySeries(
       0,
     );
     const isNoSeries = seriesKey === NO_SERIES_KEY;
+    const viewsLoaded = seriesPosts.every((post) => viewsByPostId.has(post.id));
 
     return {
       seriesId: isNoSeries ? null : seriesKey,
@@ -105,6 +157,7 @@ function groupBySeries(
       postCount: seriesPosts.length,
       totalViews,
       averageViews: totalViews / seriesPosts.length,
+      viewsLoaded,
     };
   });
 }

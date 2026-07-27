@@ -19,6 +19,22 @@ body {
     cursor: pointer;
   }
 
+  .sort-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    font-size: 13px;
+    color: #555;
+  }
+
+  .sort-row select {
+    padding: 4px 6px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 13px;
+  }
+
   #result {
     margin-top: 16px;
   }
@@ -27,4 +43,19 @@ body {
     padding: 8px 0;
     border-bottom: 1px solid #eee;
     font-size: 13px;
+  }
+
+  .series-stats.loading {
+    color: #999;
+    animation: stats-pulse 1.2s ease-in-out infinite;
+  }
+
+  @keyframes stats-pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.35;
+    }
   }

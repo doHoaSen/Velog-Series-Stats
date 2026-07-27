@@ -11,10 +11,10 @@ Velog는 게시글별 조회수는 확인할 수 있지만, 시리즈 단위로 
 1. `chrome.tabs`로 열려있는 velog.io 탭을 찾거나 없으면 새로 엶
 2. `chrome.scripting.executeScript`로 그 탭 안에 GraphQL 요청 코드를 주입해서 실행 (Origin이 실제로 `https://velog.io`가 되도록)
 3. `auth` 쿼리로 로그인한 사용자의 username 확인
-4. Velog GraphQL API로 내 게시글 전체 목록, 시리즈 목록, 게시글-시리즈 매핑 조회
-5. 게시글별 `GetStats` 요청으로 조회수 데이터 조회 (5개씩 배치 처리)
+4. Velog GraphQL API로 내 게시글 전체 목록, 시리즈 목록, 게시글-시리즈 매핑 조회 → 조회수 없이 시리즈 목록(게시글 수 기준)부터 즉시 렌더링
+5. 게시글 조회수는 GraphQL alias로 여러 `getStats`를 한 요청에 묶어 배치 조회 (요청당 5개, 배치는 순차 처리), 배치가 도착할 때마다 화면에 점진적으로 반영
 6. `series.id` 기준으로 게시글 그룹화, 시리즈별 총조회수 및 평균 조회수 계산
-7. 팝업 화면에 결과 렌더링
+7. 팝업 화면에 결과 렌더링 (게시글 수 / 조회수 정렬 선택 가능, 조회수 정렬은 전체 로딩 완료 후 한 번에 재정렬)
 
 서버 없이 확장 프로그램 내부에서 모든 과정이 완결되도록 설계합니다 (별도 백엔드 없음).
 
@@ -44,6 +44,15 @@ query GetStats($post_id: ID!) {
 ```
 
 게시글 목록 쿼리(`velogPosts`)에는 `series` 필드가 없으므로, 시리즈 매핑은 게시글 상세 조회 응답의 `series` 필드를 활용해야 합니다.
+
+**조회수 배치 조회:** Velog에는 여러 게시글의 조회수를 한 번에 조회하는 API가 없어서, GraphQL alias로 여러 `getStats` 호출을 한 요청에 묶어 왕복 횟수를 줄입니다 (`chrome.scripting.executeScript` 탭 주입 왕복 1회당 오버헤드가 커서, 요청 수 자체를 줄이는 게 raw 네트워크 시간 단축보다 효과가 큽니다). 단, alias는 서버에서 병렬로 처리되어 DB 커넥션을 그만큼 동시에 열 수 있음 — 배치 크기를 30으로 시도했다가 Velog 서버의 Prisma 커넥션 풀 한도(5)를 넘겨 `Timed out fetching a new connection from the connection pool` 에러를 유발한 적이 있어(2026-07-23), 요청당 alias 5개 + 배치 순차 처리로 낮춰서 사용 중.
+
+```graphql
+query GetStatsBatch($id0: ID!, $id1: ID!) {
+  s0: getStats(post_id: $id0) { total }
+  s1: getStats(post_id: $id1) { total }
+}
+```
 
 ## 기술 스택
 

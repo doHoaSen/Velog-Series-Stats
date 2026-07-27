@@ -1,28 +1,37 @@
 import { requestVelogGraphql, VELOG_V2_ENDPOINT } from "./graphqlClient";
-import type { PostStats } from "../model/stats";
 
-const GET_STATS_QUERY = `
-  query GetStats($post_id: ID!) {
-    getStats(post_id: $post_id) {
-      total
-      count_by_day {
-        count
-        day
-      }
-    }
+// 게시글마다 getStats를 따로 요청하면 게시글 수만큼 executeScript 탭 주입 왕복이
+// 생겨 느려진다. GraphQL alias로 여러 게시글의 getStats를 한 요청에 묶어 왕복 횟수를 줄인다.
+export async function fetchPostStatsBatch(postIds: string[]): Promise<Map<string, number>> {
+  const viewsByPostId = new Map<string, number>();
+
+  if (postIds.length === 0) {
+    return viewsByPostId;
   }
-`;
 
-interface GetStatsData {
-  getStats: PostStats;
-}
+  const variableDefs = postIds.map((_, index) => `$id${index}: ID!`).join(", ");
+  const fields = postIds
+    .map((_, index) => `s${index}: getStats(post_id: $id${index}) { total }`)
+    .join("\n");
+  const query = `query GetStatsBatch(${variableDefs}) {\n${fields}\n}`;
 
-export async function fetchPostStats(postId: string): Promise<PostStats> {
-  const data = await requestVelogGraphql<GetStatsData, { post_id: string }>({
-    endpoint: VELOG_V2_ENDPOINT,
-    query: GET_STATS_QUERY,
-    variables: { post_id: postId },
+  const variables: Record<string, string> = {};
+  postIds.forEach((postId, index) => {
+    variables[`id${index}`] = postId;
   });
 
-  return data.getStats;
+  const data = await requestVelogGraphql<
+    Record<string, { total: number } | null>,
+    Record<string, string>
+  >({
+    endpoint: VELOG_V2_ENDPOINT,
+    query,
+    variables,
+  });
+
+  postIds.forEach((postId, index) => {
+    viewsByPostId.set(postId, data[`s${index}`]?.total ?? 0);
+  });
+
+  return viewsByPostId;
 }
