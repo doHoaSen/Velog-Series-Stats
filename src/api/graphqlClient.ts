@@ -40,6 +40,11 @@ export async function requestVelogGraphql<TData, TVariables>(
         throw error;
       }
 
+      // 재시도는 HTTP 레벨에선 200으로 보여서 Network 탭만으로는 재시도 여부를 알 수 없다.
+      // 얼마나 자주/몇 번 재시도가 발생하는지 콘솔로 남겨서 추적 가능하게 한다.
+      console.warn(
+        `[VelogSeriesStats] 커넥션 풀 타임아웃 재시도 (${attempt + 1}/${RETRY_DELAYS_MS.length}, ${delayMs}ms 대기)`,
+      );
       await delay(delayMs);
     }
   }
