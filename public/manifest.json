@@ -1,7 +1,7 @@
 {
     "manifest_version": 3,
     "name": "Velog Series Stats",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "description": "Velog 게시글 조회수를 시리즈별로 집계합니다.",
     "permissions": ["storage", "scripting", "tabs"],
     "host_permissions": [
