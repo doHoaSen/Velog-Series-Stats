@@ -49,4 +49,16 @@ describe("loadCachedSeriesStats / saveCachedSeriesStats", () => {
     const cached = await loadCachedSeriesStats();
     expect(cached).toBeNull();
   });
+
+  it("스키마 버전이 다른(예전 형식) 캐시는 폐기하고 null을 반환한다", async () => {
+    storage.set("cachedSeriesStats", {
+      username: "tester",
+      seriesStats: [],
+      cachedAt: Date.now(),
+      schemaVersion: 0,
+    });
+
+    const cached = await loadCachedSeriesStats();
+    expect(cached).toBeNull();
+  });
 });
