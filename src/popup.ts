@@ -43,58 +43,32 @@ sortSelect.addEventListener("change", () => {
 
 void initFromCache();
 
-// 캐시가 있으면 버튼을 누르지 않아도 이전 결과를 즉시 보여주고,
-// 그 뒤에 조용히 백그라운드에서 최신 데이터로 새로고침한다.
+// 캐시가 신선하면(5분 이내) 버튼을 누르지 않아도 즉시 보여준다.
+// 오래된 캐시는 헷갈리는 옛 숫자를 화면에 띄우지 않고 바로 새로 조회한다(loadSeriesStats 재사용,
+// 실패 시에만 이 캐시로 되돌아가도록 fallback으로 전달).
 async function initFromCache(): Promise<void> {
-  if (!statusElement) return;
-
   const cached = await loadCachedSeriesStats();
   if (!cached) return;
 
+  if (isCacheFresh(cached.cachedAt)) {
+    showCachedStats(cached);
+    return;
+  }
+
+  void loadSeriesStats(cached);
+}
+
+function showCachedStats(cached: CachedSeriesStats): void {
+  if (!statusElement) return;
   latestSeriesStats = cached.seriesStats;
   viewsFullyLoaded = true;
   statusElement.textContent = `${cached.username}님의 시리즈별 조회수 (${formatRelativeTime(cached.cachedAt)} 기준)`;
   render();
-
-  if (isCacheFresh(cached.cachedAt)) return;
-
-  void refreshInBackground(cached);
 }
 
-async function refreshInBackground(cached: CachedSeriesStats): Promise<void> {
-  if (!statusElement || !loadButton) return;
-
-  loadButton.disabled = true;
-  statusElement.textContent = `${cached.username}님의 시리즈별 조회수 (${formatRelativeTime(cached.cachedAt)} 기준) · 새로고침 중...`;
-
-  const startedAt = performance.now();
-
-  try {
-    const user = await fetchCurrentUser();
-    if (!user) return; // 로그인 안 된 상태면 캐시된 화면을 그대로 두고 조용히 종료
-
-    const overview = await fetchSeriesOverview(user.username);
-    const finalSeriesStats = await loadSeriesViews(overview);
-
-    // 새 데이터가 완전히 준비된 시점에만 한 번에 반영한다 — 중간에 화면이
-    // "조회수 불러오는 중" 상태로 되돌아가면 이미 보여준 숫자가 깜빡이며
-    // 사라지는 것처럼 보이기 때문에, 진행 중엔 기존 화면을 그대로 둔다.
-    latestSeriesStats = finalSeriesStats;
-    viewsFullyLoaded = true;
-    render();
-    void saveCachedSeriesStats(user.username, finalSeriesStats);
-
-    const elapsedSeconds = ((performance.now() - startedAt) / 1000).toFixed(1);
-    statusElement.textContent = `${user.username}님의 시리즈별 조회수 (${elapsedSeconds}초 소요)`;
-  } catch (error) {
-    console.warn("[VelogSeriesStats] 백그라운드 새로고침 실패, 캐시된 값 유지", error);
-    statusElement.textContent = `${cached.username}님의 시리즈별 조회수 (${formatRelativeTime(cached.cachedAt)} 기준)`;
-  } finally {
-    loadButton.disabled = false;
-  }
-}
-
-async function loadSeriesStats(): Promise<void> {
+// fallbackCache가 있으면(오래된 캐시 자동 새로고침) 로그인 안 됨/조회 실패 시 그 캐시로 되돌아가고,
+// 없으면(수동 버튼 클릭) 에러 메시지를 그대로 보여준다.
+async function loadSeriesStats(fallbackCache?: CachedSeriesStats): Promise<void> {
   if (!statusElement || !loadButton || !resultElement) return;
 
   loadButton.disabled = true;
@@ -113,7 +87,11 @@ async function loadSeriesStats(): Promise<void> {
     const user = await fetchCurrentUser();
 
     if (!user) {
-      statusElement.textContent = "Velog에 로그인 후 다시 시도해주세요.";
+      if (fallbackCache) {
+        showCachedStats(fallbackCache);
+      } else {
+        statusElement.textContent = "Velog에 로그인 후 다시 시도해주세요.";
+      }
       return;
     }
 
@@ -137,8 +115,13 @@ async function loadSeriesStats(): Promise<void> {
     statusElement.textContent = `${user.username}님의 시리즈별 조회수 (${elapsedSeconds}초 소요)`;
     render();
   } catch (error) {
-    statusElement.textContent =
-      error instanceof Error ? error.message : "통계를 불러오는 중 오류가 발생했습니다.";
+    if (fallbackCache) {
+      console.warn("[VelogSeriesStats] 자동 새로고침 실패, 캐시된 값 유지", error);
+      showCachedStats(fallbackCache);
+    } else {
+      statusElement.textContent =
+        error instanceof Error ? error.message : "통계를 불러오는 중 오류가 발생했습니다.";
+    }
   } finally {
     loadButton.disabled = false;
   }
