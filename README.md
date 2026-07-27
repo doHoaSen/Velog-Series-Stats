@@ -112,3 +112,7 @@ npm run build   # esbuild 번들링 → dist/
 ```
 
 `chrome://extensions` → 개발자 모드 활성화 → "압축해제된 확장 프로그램을 로드합니다" → `dist` 폴더 선택
+
+## 라이선스
+
+[MIT](./LICENSE) © doHoaSen

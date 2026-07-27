@@ -8,8 +8,8 @@
     "check": "tsc --noEmit"
   },
   "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "author": "doHoaSen",
+  "license": "MIT",
   "type": "commonjs",
   "devDependencies": {
     "@types/chrome": "^0.2.2",
