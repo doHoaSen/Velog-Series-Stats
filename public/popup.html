@@ -11,6 +11,13 @@
       <h1>Velog Series Stats</h1>
       <p id="status">확장 프로그램이 실행되었습니다.</p>
       <button id="load-button" type="button">통계 불러오기</button>
+      <div id="sort-row" class="sort-row">
+        <label for="sort-select">정렬</label>
+        <select id="sort-select">
+          <option value="postCount">게시글 수</option>
+          <option value="totalViews">조회수</option>
+        </select>
+      </div>
       <section id="result"></section>
     </main>
     <script src="./popup.js"></script>

@@ -19,6 +19,22 @@ body {
     cursor: pointer;
   }
 
+  .sort-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    font-size: 13px;
+    color: #555;
+  }
+
+  .sort-row select {
+    padding: 4px 6px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 13px;
+  }
+
   #result {
     margin-top: 16px;
   }
@@ -27,4 +43,44 @@ body {
     padding: 8px 0;
     border-bottom: 1px solid #eee;
     font-size: 13px;
+  }
+
+  .series-stats.loading {
+    color: #999;
+    animation: stats-pulse 1.2s ease-in-out infinite;
+  }
+
+  .loading-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 24px 0;
+    color: #999;
+    font-size: 13px;
+  }
+
+  .loading-spinner {
+    width: 20px;
+    height: 20px;
+    border: 2px solid #e0e0e0;
+    border-top-color: #666;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @keyframes stats-pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.35;
+    }
   }
