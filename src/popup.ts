@@ -1,6 +1,9 @@
 import { fetchCurrentUser } from "./api/userApi";
 import { fetchSeriesOverview, loadSeriesViews } from "./service/seriesAggregator";
 import type { SeriesStats } from "./service/seriesAggregator";
+import { loadCachedSeriesStats, saveCachedSeriesStats, isCacheFresh } from "./service/statsCache";
+import type { CachedSeriesStats } from "./service/statsCache";
+import { formatRelativeTime } from "./utils/time";
 
 type SortMode = "postCount" | "totalViews";
 
@@ -37,6 +40,59 @@ sortSelect.addEventListener("change", () => {
   sortMode = sortSelect.value === "totalViews" ? "totalViews" : "postCount";
   render();
 });
+
+void initFromCache();
+
+// 캐시가 있으면 버튼을 누르지 않아도 이전 결과를 즉시 보여주고,
+// 그 뒤에 조용히 백그라운드에서 최신 데이터로 새로고침한다.
+async function initFromCache(): Promise<void> {
+  if (!statusElement) return;
+
+  const cached = await loadCachedSeriesStats();
+  if (!cached) return;
+
+  latestSeriesStats = cached.seriesStats;
+  viewsFullyLoaded = true;
+  statusElement.textContent = `${cached.username}님의 시리즈별 조회수 (${formatRelativeTime(cached.cachedAt)} 기준)`;
+  render();
+
+  if (isCacheFresh(cached.cachedAt)) return;
+
+  void refreshInBackground(cached);
+}
+
+async function refreshInBackground(cached: CachedSeriesStats): Promise<void> {
+  if (!statusElement || !loadButton) return;
+
+  loadButton.disabled = true;
+  statusElement.textContent = `${cached.username}님의 시리즈별 조회수 (${formatRelativeTime(cached.cachedAt)} 기준) · 새로고침 중...`;
+
+  const startedAt = performance.now();
+
+  try {
+    const user = await fetchCurrentUser();
+    if (!user) return; // 로그인 안 된 상태면 캐시된 화면을 그대로 두고 조용히 종료
+
+    const overview = await fetchSeriesOverview(user.username);
+    const finalSeriesStats = await loadSeriesViews(overview);
+
+    // 새 데이터가 완전히 준비된 시점에만 한 번에 반영한다 — 중간에 화면이
+    // "조회수 불러오는 중" 상태로 되돌아가면 이미 보여준 숫자가 깜빡이며
+    // 사라지는 것처럼 보이기 때문에, 진행 중엔 기존 화면을 그대로 둔다.
+    latestSeriesStats = finalSeriesStats;
+    viewsFullyLoaded = true;
+    render();
+    void saveCachedSeriesStats(user.username, finalSeriesStats);
+
+    const elapsedSeconds = ((performance.now() - startedAt) / 1000).toFixed(1);
+    statusElement.textContent = `${user.username}님의 시리즈별 조회수 (${elapsedSeconds}초 소요)`;
+  } catch (error) {
+    console.warn("[VelogSeriesStats] 백그라운드 새로고침 실패, 캐시된 값 유지", error);
+    statusElement.textContent = `${cached.username}님의 시리즈별 조회수 (${formatRelativeTime(cached.cachedAt)} 기준)`;
+  } finally {
+    loadButton.disabled = false;
+  }
+}
 
 async function loadSeriesStats(): Promise<void> {
   if (!statusElement || !loadButton || !resultElement) return;
@@ -76,6 +132,7 @@ async function loadSeriesStats(): Promise<void> {
 
     latestSeriesStats = finalSeriesStats;
     viewsFullyLoaded = true;
+    void saveCachedSeriesStats(user.username, finalSeriesStats);
     const elapsedSeconds = ((performance.now() - startedAt) / 1000).toFixed(1);
     statusElement.textContent = `${user.username}님의 시리즈별 조회수 (${elapsedSeconds}초 소요)`;
     render();

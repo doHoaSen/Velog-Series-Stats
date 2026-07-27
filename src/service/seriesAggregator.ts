@@ -137,7 +137,7 @@ function chunk<T>(items: T[], size: number): T[][] {
   return chunks;
 }
 
-function groupBySeries(
+export function groupBySeries(
   posts: VelogPost[],
   seriesList: VelogSeries[],
   postIdToSeriesId: Map<string, string>,

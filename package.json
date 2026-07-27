@@ -3,9 +3,10 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
-   "scripts": {
+  "scripts": {
     "build": "node scripts/build.mjs",
-    "check": "tsc --noEmit"
+    "check": "tsc --noEmit",
+    "test": "vitest run"
   },
   "keywords": [],
   "author": "doHoaSen",
@@ -14,6 +15,7 @@
   "devDependencies": {
     "@types/chrome": "^0.2.2",
     "esbuild": "^0.28.1",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
   }
 }
