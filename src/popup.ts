@@ -6,6 +6,10 @@ import type { CachedSeriesStats } from "./service/statsCache";
 
 type SortMode = "postCount" | "totalViews";
 
+// 캐시가 이 시간보다 신선하면 백그라운드 재조회를 생략한다 — 방금 불러온 결과를
+// 팝업을 열 때마다 매번 무겁게 다시 조회하는 걸 방지하기 위함.
+const CACHE_FRESH_THRESHOLD_MS = 5 * 60 * 1000;
+
 const statusElement = document.querySelector<HTMLParagraphElement>("#status");
 const loadButton = document.querySelector<HTMLButtonElement>("#load-button");
 const resultElement = document.querySelector<HTMLElement>("#result");
@@ -54,6 +58,9 @@ async function initFromCache(): Promise<void> {
   viewsFullyLoaded = true;
   statusElement.textContent = `${cached.username}님의 시리즈별 조회수 (${formatRelativeTime(cached.cachedAt)} 기준)`;
   render();
+
+  const cacheAge = Date.now() - cached.cachedAt;
+  if (cacheAge < CACHE_FRESH_THRESHOLD_MS) return;
 
   void refreshInBackground(cached);
 }
