@@ -3,9 +3,26 @@ import { fetchMySeriesList, fetchSeriesPosts } from "../api/seriesApi";
 import { fetchPostStatsBatch } from "../api/statsApi";
 import type { VelogPost } from "../model/post";
 import type { VelogSeries } from "../model/series";
+import type { PostStats } from "../model/stats";
 
 const NO_SERIES_KEY = "__NO_SERIES__";
 const NO_SERIES_NAME = "시리즈 없음";
+// 성장률은 최근 7일 합계와 직전 7일 합계를 비교해서 계산한다 (총 14일치 일자별
+// 조회수가 필요). Velog는 한국 서비스라 count_by_day의 day도 KST(UTC+9) 기준으로
+// 집계된다고 보고, 날짜 경계를 브라우저 로컬 타임존이 아니라 KST로 고정해서 계산한다
+// (한국은 DST가 없어 오프셋이 연중 고정이라 계산이 단순함).
+const TREND_WINDOW_DAYS = 7;
+const TREND_HISTORY_DAYS = TREND_WINDOW_DAYS * 2;
+const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
+function toKstDateString(date: Date): string {
+  const kstTime = new Date(date.getTime() + KST_OFFSET_MS);
+  const year = kstTime.getUTCFullYear();
+  const month = String(kstTime.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(kstTime.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
 // alias 배치 크기를 서버 Prisma 커넥션 풀 한도(5)에 맞춰 30 → 5로,
 // 배치 동시 실행도 5 → 1(순차)로 낮췄다. (30개 alias × 배치 5개 동시 처리 조합이
 // 실제로 "Timed out fetching a new connection from the connection pool" 에러를 유발함 — 2026-07-23 확인)
@@ -27,6 +44,12 @@ export interface SeriesStats {
   averageViews: number;
   // totalViews=0만으로는 '진짜 조회수 0'과 '아직 안 불러옴'을 구분할 수 없어 별도 플래그로 로딩 상태를 표시한다.
   viewsLoaded: boolean;
+  // 최근 TREND_HISTORY_DAYS일치 KST 기준 일자별 조회수 (연속, 데이터 없는 날은 0)
+  dailyCounts: Array<{ day: string; count: number }>;
+  recentTotal: number;
+  previousTotal: number;
+  // previousTotal이 0이면(직전 7일 데이터 없음) 증감률을 계산할 수 없어 null
+  growthRatePercent: number | null;
 }
 
 export interface SeriesOverview {
@@ -53,7 +76,7 @@ export async function fetchSeriesOverview(username: string): Promise<SeriesOverv
     `[VelogSeriesStats] 게시글-시리즈 매핑: ${(performance.now() - mappingStart).toFixed(0)}ms`,
   );
 
-  const seriesStats = groupBySeries(posts, seriesList, postIdToSeriesId, new Map());
+  const seriesStats = groupBySeries(posts, seriesList, postIdToSeriesId, new Map<string, PostStats>());
 
   return { posts, seriesList, postIdToSeriesId, seriesStats };
 }
@@ -65,10 +88,10 @@ export async function loadSeriesViews(
   const { posts, seriesList, postIdToSeriesId } = overview;
   const statsStart = performance.now();
 
-  const viewsByPostId = await fetchViewsForPosts(posts, (partialViews) => {
+  const statsByPostId = await fetchViewsForPosts(posts, (partialStats) => {
     onProgress?.(
-      groupBySeries(posts, seriesList, postIdToSeriesId, partialViews),
-      partialViews.size,
+      groupBySeries(posts, seriesList, postIdToSeriesId, partialStats),
+      partialStats.size,
     );
   });
 
@@ -76,7 +99,7 @@ export async function loadSeriesViews(
     `[VelogSeriesStats] 조회수 조회 (${posts.length}개 게시글): ${(performance.now() - statsStart).toFixed(0)}ms`,
   );
 
-  return groupBySeries(posts, seriesList, postIdToSeriesId, viewsByPostId);
+  return groupBySeries(posts, seriesList, postIdToSeriesId, statsByPostId);
 }
 
 async function mapPostIdsToSeriesIds(
@@ -104,9 +127,9 @@ async function mapPostIdsToSeriesIds(
 
 async function fetchViewsForPosts(
   posts: VelogPost[],
-  onBatch?: (viewsSoFar: Map<string, number>) => void,
-): Promise<Map<string, number>> {
-  const viewsByPostId = new Map<string, number>();
+  onBatch?: (statsSoFar: Map<string, PostStats>) => void,
+): Promise<Map<string, PostStats>> {
+  const statsByPostId = new Map<string, PostStats>();
   const idBatches = chunk(
     posts.map((post) => post.id),
     STATS_POST_BATCH_SIZE,
@@ -117,16 +140,16 @@ async function fetchViewsForPosts(
 
     await Promise.all(
       round.map(async (idBatch) => {
-        const batchViews = await fetchPostStatsBatch(idBatch);
-        for (const [postId, total] of batchViews) {
-          viewsByPostId.set(postId, total);
+        const batchStats = await fetchPostStatsBatch(idBatch);
+        for (const [postId, stats] of batchStats) {
+          statsByPostId.set(postId, stats);
         }
-        onBatch?.(viewsByPostId);
+        onBatch?.(statsByPostId);
       }),
     );
   }
 
-  return viewsByPostId;
+  return statsByPostId;
 }
 
 function chunk<T>(items: T[], size: number): T[][] {
@@ -141,7 +164,8 @@ export function groupBySeries(
   posts: VelogPost[],
   seriesList: VelogSeries[],
   postIdToSeriesId: Map<string, string>,
-  viewsByPostId: Map<string, number>,
+  statsByPostId: Map<string, PostStats>,
+  now: Date = new Date(),
 ): SeriesStats[] {
   const seriesNameById = new Map(seriesList.map((series) => [series.id, series.name]));
   const postsBySeriesKey = new Map<string, VelogPost[]>();
@@ -155,11 +179,14 @@ export function groupBySeries(
 
   return Array.from(postsBySeriesKey.entries()).map(([seriesKey, seriesPosts]) => {
     const totalViews = seriesPosts.reduce(
-      (sum, post) => sum + (viewsByPostId.get(post.id) ?? 0),
+      (sum, post) => sum + (statsByPostId.get(post.id)?.total ?? 0),
       0,
     );
     const isNoSeries = seriesKey === NO_SERIES_KEY;
-    const viewsLoaded = seriesPosts.every((post) => viewsByPostId.has(post.id));
+    const viewsLoaded = seriesPosts.every((post) => statsByPostId.has(post.id));
+
+    const dailyCounts = buildDailyCounts(seriesPosts, statsByPostId, now);
+    const { recentTotal, previousTotal, growthRatePercent } = calculateGrowth(dailyCounts);
 
     return {
       seriesId: isNoSeries ? null : seriesKey,
@@ -168,6 +195,53 @@ export function groupBySeries(
       totalViews,
       averageViews: totalViews / seriesPosts.length,
       viewsLoaded,
+      dailyCounts,
+      recentTotal,
+      previousTotal,
+      growthRatePercent,
     };
   });
+}
+
+function buildDailyCounts(
+  seriesPosts: VelogPost[],
+  statsByPostId: Map<string, PostStats>,
+  now: Date,
+): Array<{ day: string; count: number }> {
+  const countByDay = new Map<string, number>();
+
+  for (const post of seriesPosts) {
+    const stats = statsByPostId.get(post.id);
+    if (!stats) continue;
+
+    for (const entry of stats.count_by_day) {
+      countByDay.set(entry.day, (countByDay.get(entry.day) ?? 0) + entry.count);
+    }
+  }
+
+  const dailyCounts: Array<{ day: string; count: number }> = [];
+  for (let offset = TREND_HISTORY_DAYS - 1; offset >= 0; offset--) {
+    const day = toKstDateString(new Date(now.getTime() - offset * ONE_DAY_MS));
+    dailyCounts.push({ day, count: countByDay.get(day) ?? 0 });
+  }
+
+  return dailyCounts;
+}
+
+function calculateGrowth(dailyCounts: Array<{ day: string; count: number }>): {
+  recentTotal: number;
+  previousTotal: number;
+  growthRatePercent: number | null;
+} {
+  const previousWindow = dailyCounts.slice(0, TREND_WINDOW_DAYS);
+  const recentWindow = dailyCounts.slice(TREND_WINDOW_DAYS);
+  const sum = (window: Array<{ count: number }>) =>
+    window.reduce((total, entry) => total + entry.count, 0);
+
+  const previousTotal = sum(previousWindow);
+  const recentTotal = sum(recentWindow);
+  const growthRatePercent =
+    previousTotal === 0 ? null : ((recentTotal - previousTotal) / previousTotal) * 100;
+
+  return { recentTotal, previousTotal, growthRatePercent };
 }
