@@ -20,6 +20,10 @@ jobs:
       - name: Fetch and merge traffic data
         uses: actions/github-script@v7
         with:
+          # Traffic API는 administration:read 권한이 필요한데, 기본 GITHUB_TOKEN에는
+          # 부여할 수 없는 권한이라(workflow permissions에 administration 항목 자체가 없음)
+          # Administration: Read-only 권한을 가진 개인 액세스 토큰을 시크릿으로 등록해서 대신 쓴다.
+          github-token: ${{ secrets.TRAFFIC_PAT }}
           script: |
             const fs = require("fs");
             const path = require("path");
