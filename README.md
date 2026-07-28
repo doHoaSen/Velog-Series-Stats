@@ -122,6 +122,10 @@ GitHub Insights의 트래픽 통계는 최근 14일치만 보여주지만, [`tra
   <img src=".github/traffic-data/traffic-stats-light.svg" alt="저장소 누적 조회수 및 클론수">
 </picture>
 
+## 개인정보처리방침
+
+[PRIVACY.md](./PRIVACY.md) — 별도 서버 없이 브라우저 안에서만 동작하며, 어떤 데이터도 외부로 전송하지 않습니다.
+
 ## 라이선스
 
 [MIT](./LICENSE) © doHoaSen
