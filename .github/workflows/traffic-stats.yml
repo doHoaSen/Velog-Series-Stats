@@ -1,0 +1,75 @@
+name: Track repository traffic
+
+# GitHub Insights > Traffic은 최근 14일치만 보여주고 그 이전 데이터는 사라진다.
+# 매일 조회수/클론수를 가져와 .github/traffic-data/*.json에 날짜별로 누적 저장해서
+# 14일이 지나도 히스토리가 남도록 한다.
+on:
+  schedule:
+    - cron: "0 21 * * *" # 매일 UTC 21:00(KST 06:00, 다음날)에 전날 데이터를 확정해서 가져온다
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  traffic:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch and merge traffic data
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require("fs");
+            const path = require("path");
+
+            const dir = ".github/traffic-data";
+            fs.mkdirSync(dir, { recursive: true });
+
+            // 같은 날짜가 다시 들어오면 최신 값으로 덮어써서(upsert) 14일 창이 겹치는 동안
+            // 값이 계속 갱신되다가, 창 밖으로 밀려난 뒤로는 마지막 값이 그대로 보존되게 한다.
+            async function mergeMetric(fileName, dataKey, fetcher) {
+              const filePath = path.join(dir, fileName);
+              const existing = fs.existsSync(filePath)
+                ? JSON.parse(fs.readFileSync(filePath, "utf8"))
+                : {};
+
+              const { data } = await fetcher();
+              for (const day of data[dataKey]) {
+                const date = day.timestamp.slice(0, 10);
+                existing[date] = { count: day.count, uniques: day.uniques };
+              }
+
+              const sorted = Object.fromEntries(
+                Object.entries(existing).sort(([a], [b]) => a.localeCompare(b)),
+              );
+              fs.writeFileSync(filePath, JSON.stringify(sorted, null, 2) + "\n");
+            }
+
+            await mergeMetric("views.json", "views", () =>
+              github.rest.repos.getViews({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                per: "day",
+              }),
+            );
+            await mergeMetric("clones.json", "clones", () =>
+              github.rest.repos.getClones({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                per: "day",
+              }),
+            );
+
+      - name: Commit updated traffic data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .github/traffic-data
+          if git diff --cached --quiet; then
+            echo "변경된 트래픽 데이터가 없습니다."
+            exit 0
+          fi
+          git commit -m "[$(date +%y%m%d)] 트래픽 통계 자동 갱신"
+          git push
