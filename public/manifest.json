@@ -1,7 +1,7 @@
 {
     "manifest_version": 3,
     "name": "Velog Series Stats",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "description": "Velog 게시글 조회수를 시리즈별로 집계합니다.",
     "permissions": ["storage", "scripting", "tabs"],
     "host_permissions": [
@@ -12,6 +12,16 @@
     },
     "action": {
       "default_popup": "popup.html",
-      "default_title": "Velog Series Stats"
+      "default_title": "Velog Series Stats",
+      "default_icon": {
+        "16": "icons/icon16.png",
+        "48": "icons/icon48.png",
+        "128": "icons/icon128.png"
+      }
+    },
+    "icons": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
     }
   }
