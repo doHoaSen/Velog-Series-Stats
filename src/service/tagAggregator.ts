@@ -4,6 +4,7 @@ export interface TagStats {
   tagName: string;
   postCount: number;
   totalViews: number;
+  averageViews: number;
   totalLikes: number;
   totalComments: number;
   // totalViews=0만으로는 '진짜 조회수 0'과 '아직 안 불러옴'을 구분할 수 없어 별도 플래그로 로딩 상태를 표시한다.
@@ -39,11 +40,13 @@ export function groupByTag(
   return Array.from(groupsByKey.values()).map((group) => {
     const tagPosts = Array.from(group.postsById.values());
     const viewsLoaded = tagPosts.every((post) => viewsByPostId.has(post.id));
+    const totalViews = tagPosts.reduce((sum, post) => sum + (viewsByPostId.get(post.id) ?? 0), 0);
 
     return {
       tagName: pickDisplayLabel(group.labelCounts),
       postCount: tagPosts.length,
-      totalViews: tagPosts.reduce((sum, post) => sum + (viewsByPostId.get(post.id) ?? 0), 0),
+      totalViews,
+      averageViews: totalViews / tagPosts.length,
       totalLikes: tagPosts.reduce((sum, post) => sum + post.likes, 0),
       totalComments: tagPosts.reduce((sum, post) => sum + post.comments_count, 0),
       viewsLoaded,

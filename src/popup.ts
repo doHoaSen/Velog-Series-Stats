@@ -6,24 +6,16 @@ import { loadCachedSeriesStats, saveCachedSeriesStats, isCacheFresh } from "./se
 import type { CachedSeriesStats } from "./service/statsCache";
 import { formatRelativeTime } from "./utils/time";
 
-type SortMode = "postCount" | "totalViews";
+type SortMode = "postCount" | "averageViews";
 type ActiveTab = "series" | "tag";
 
 const statusElement = document.querySelector<HTMLParagraphElement>("#status");
 const loadButton = document.querySelector<HTMLButtonElement>("#load-button");
 const resultElement = document.querySelector<HTMLElement>("#result");
-const sortRowElement = document.querySelector<HTMLElement>("#sort-row");
 const sortSelect = document.querySelector<HTMLSelectElement>("#sort-select");
 const tabButtons = document.querySelectorAll<HTMLButtonElement>(".tab-button");
 
-if (
-  !statusElement ||
-  !loadButton ||
-  !resultElement ||
-  !sortRowElement ||
-  !sortSelect ||
-  tabButtons.length === 0
-) {
+if (!statusElement || !loadButton || !resultElement || !sortSelect || tabButtons.length === 0) {
   throw new Error("팝업 화면 요소를 찾지 못했습니다.");
 }
 
@@ -53,7 +45,7 @@ loadButton.addEventListener("click", () => {
 });
 
 sortSelect.addEventListener("change", () => {
-  sortMode = sortSelect.value === "totalViews" ? "totalViews" : "postCount";
+  sortMode = sortSelect.value === "averageViews" ? "averageViews" : "postCount";
   render();
 });
 
@@ -64,7 +56,6 @@ for (const button of tabButtons) {
 
     activeTab = tab;
     for (const other of tabButtons) other.classList.toggle("active", other === button);
-    sortRowElement.classList.toggle("hidden", activeTab === "tag");
     render();
   });
 }
@@ -173,8 +164,7 @@ function render(): void {
 function renderSeries(): void {
   if (!resultElement) return;
 
-  const effectiveSortMode: SortMode = viewsFullyLoaded ? sortMode : "postCount";
-  const sorted = sortSeriesStats(latestSeriesStats, effectiveSortMode);
+  const sorted = sortByMode(latestSeriesStats, viewsFullyLoaded ? sortMode : "postCount");
   const keys = sorted.map(seriesKey);
 
   if (sameKeys(keys, lastRenderedSeriesKeys)) {
@@ -206,10 +196,7 @@ function renderSeries(): void {
 function renderTags(): void {
   if (!resultElement) return;
 
-  // 로딩 중엔 postCount로 순서를 고정하고, 조회수가 다 모이면 총 조회수 내림차순으로 보여준다.
-  const sorted = [...latestTagStats].sort((a, b) =>
-    viewsFullyLoaded ? b.totalViews - a.totalViews : b.postCount - a.postCount,
-  );
+  const sorted = sortByMode(latestTagStats, viewsFullyLoaded ? sortMode : "postCount");
   const keys = sorted.map((stats) => stats.tagName);
 
   if (sorted.length === 0) {
@@ -272,7 +259,10 @@ function createEmptyTagNotice(): HTMLElement {
   return notice;
 }
 
-function sortSeriesStats(stats: SeriesStats[], mode: SortMode): SeriesStats[] {
+function sortByMode<T extends { postCount: number; averageViews: number }>(
+  stats: T[],
+  mode: SortMode,
+): T[] {
   return [...stats].sort((a, b) => b[mode] - a[mode]);
 }
 
@@ -316,6 +306,6 @@ function createTagStatsRow(stats: TagStats): RowElements {
 function updateTagStatsRow(elements: RowElements, stats: TagStats): void {
   elements.statsSpan.className = stats.viewsLoaded ? "stats-value" : "stats-value loading";
   elements.statsSpan.textContent = stats.viewsLoaded
-    ? `조회수 ${stats.totalViews}회 · 좋아요 ${stats.totalLikes}개 · 댓글 ${stats.totalComments}개`
+    ? `총 ${stats.totalViews}회 · 평균 ${stats.averageViews.toFixed(1)}회 · 좋아요 ${stats.totalLikes}개 · 댓글 ${stats.totalComments}개`
     : "조회수 불러오는 중";
 }

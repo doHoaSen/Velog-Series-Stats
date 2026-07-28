@@ -51,10 +51,6 @@ body {
     color: #555;
   }
 
-  .sort-row.hidden {
-    display: none;
-  }
-
   .sort-row select {
     padding: 4px 6px;
     border: 1px solid #ccc;

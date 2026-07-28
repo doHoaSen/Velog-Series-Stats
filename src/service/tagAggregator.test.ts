@@ -36,6 +36,7 @@ describe("groupByTag", () => {
     expect(react).toMatchObject({
       postCount: 2,
       totalViews: 30,
+      averageViews: 15,
       totalLikes: 8,
       totalComments: 3,
       viewsLoaded: true,
@@ -45,6 +46,7 @@ describe("groupByTag", () => {
     expect(typescript).toMatchObject({
       postCount: 1,
       totalViews: 7,
+      averageViews: 7,
       totalLikes: 1,
       totalComments: 0,
     });
@@ -58,7 +60,13 @@ describe("groupByTag", () => {
 
     expect(result).toHaveLength(2);
     for (const tagStats of result) {
-      expect(tagStats).toMatchObject({ postCount: 1, totalViews: 100, totalLikes: 4, totalComments: 2 });
+      expect(tagStats).toMatchObject({
+        postCount: 1,
+        totalViews: 100,
+        averageViews: 100,
+        totalLikes: 4,
+        totalComments: 2,
+      });
     }
   });
 
