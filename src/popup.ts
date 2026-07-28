@@ -56,6 +56,13 @@ for (const button of tabButtons) {
 
     activeTab = tab;
     for (const other of tabButtons) other.classList.toggle("active", other === button);
+    // 탭을 바꾸면 #result의 DOM이 다른 탭의 행으로 바뀌어 있으므로, 데이터가 그대로여도
+    // "이전과 동일" 최적화를 건너뛰고 반드시 다시 붙이도록 직전 렌더 키를 비운다.
+    if (activeTab === "series") {
+      lastRenderedSeriesKeys = [];
+    } else {
+      lastRenderedTagKeys = [];
+    }
     render();
   });
 }
