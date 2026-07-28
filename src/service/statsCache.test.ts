@@ -39,7 +39,7 @@ describe("loadCachedSeriesStats / saveCachedSeriesStats", () => {
   });
 
   it("저장한 값을 다시 불러올 수 있다", async () => {
-    await saveCachedSeriesStats("tester", []);
+    await saveCachedSeriesStats("tester", [], []);
     const cached = await loadCachedSeriesStats();
 
     expect(cached?.username).toBe("tester");

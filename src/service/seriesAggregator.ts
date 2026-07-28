@@ -3,6 +3,8 @@ import { fetchMySeriesList, fetchSeriesPosts } from "../api/seriesApi";
 import { fetchPostStatsBatch } from "../api/statsApi";
 import type { VelogPost } from "../model/post";
 import type { VelogSeries } from "../model/series";
+import { groupByTag } from "./tagAggregator";
+import type { TagStats } from "./tagAggregator";
 
 const NO_SERIES_KEY = "__NO_SERIES__";
 const NO_SERIES_NAME = "시리즈 없음";
@@ -34,6 +36,7 @@ export interface SeriesOverview {
   seriesList: VelogSeries[];
   postIdToSeriesId: Map<string, string>;
   seriesStats: SeriesStats[];
+  tagStats: TagStats[];
 }
 
 // 조회수 없이 시리즈 목록(게시글 수)부터 먼저 보여줄 수 있도록 조회 단계와 조회수 집계 단계를 분리했다.
@@ -54,20 +57,29 @@ export async function fetchSeriesOverview(username: string): Promise<SeriesOverv
   );
 
   const seriesStats = groupBySeries(posts, seriesList, postIdToSeriesId, new Map());
+  const tagStats = groupByTag(posts, new Map());
 
-  return { posts, seriesList, postIdToSeriesId, seriesStats };
+  return { posts, seriesList, postIdToSeriesId, seriesStats, tagStats };
+}
+
+export interface LoadedStats {
+  seriesStats: SeriesStats[];
+  tagStats: TagStats[];
 }
 
 export async function loadSeriesViews(
   overview: SeriesOverview,
-  onProgress?: (seriesStats: SeriesStats[], loadedPostCount: number) => void,
-): Promise<SeriesStats[]> {
+  onProgress?: (loaded: LoadedStats, loadedPostCount: number) => void,
+): Promise<LoadedStats> {
   const { posts, seriesList, postIdToSeriesId } = overview;
   const statsStart = performance.now();
 
   const viewsByPostId = await fetchViewsForPosts(posts, (partialViews) => {
     onProgress?.(
-      groupBySeries(posts, seriesList, postIdToSeriesId, partialViews),
+      {
+        seriesStats: groupBySeries(posts, seriesList, postIdToSeriesId, partialViews),
+        tagStats: groupByTag(posts, partialViews),
+      },
       partialViews.size,
     );
   });
@@ -76,7 +88,10 @@ export async function loadSeriesViews(
     `[VelogSeriesStats] 조회수 조회 (${posts.length}개 게시글): ${(performance.now() - statsStart).toFixed(0)}ms`,
   );
 
-  return groupBySeries(posts, seriesList, postIdToSeriesId, viewsByPostId);
+  return {
+    seriesStats: groupBySeries(posts, seriesList, postIdToSeriesId, viewsByPostId),
+    tagStats: groupByTag(posts, viewsByPostId),
+  };
 }
 
 async function mapPostIdsToSeriesIds(
