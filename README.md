@@ -113,6 +113,15 @@ npm run build   # esbuild 번들링 → dist/
 
 `chrome://extensions` → 개발자 모드 활성화 → "압축해제된 확장 프로그램을 로드합니다" → `dist` 폴더 선택
 
+## 저장소 트래픽
+
+GitHub Insights의 트래픽 통계는 최근 14일치만 보여주지만, [`traffic-stats.yml`](.github/workflows/traffic-stats.yml) 워크플로가 매일 조회수·클론수를 누적 기록합니다.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/traffic-data/traffic-stats-dark.svg">
+  <img src=".github/traffic-data/traffic-stats-light.svg" alt="저장소 누적 조회수 및 클론수">
+</picture>
+
 ## 라이선스
 
 [MIT](./LICENSE) © doHoaSen
