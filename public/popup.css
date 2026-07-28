@@ -19,6 +19,29 @@ body {
     cursor: pointer;
   }
 
+  .tab-row {
+    display: flex;
+    gap: 4px;
+    margin-top: 12px;
+  }
+
+  .tab-button {
+    flex: 1;
+    width: auto;
+    padding: 6px 8px;
+    font-size: 13px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background: #fff;
+    color: #555;
+  }
+
+  .tab-button.active {
+    background: #333;
+    border-color: #333;
+    color: #fff;
+  }
+
   .sort-row {
     display: flex;
     align-items: center;
@@ -39,15 +62,20 @@ body {
     margin-top: 16px;
   }
 
-  .series-row {
+  .stats-row {
     padding: 8px 0;
     border-bottom: 1px solid #eee;
     font-size: 13px;
   }
 
-  .series-stats.loading {
+  .stats-value.loading {
     color: #999;
     animation: stats-pulse 1.2s ease-in-out infinite;
+  }
+
+  .empty-notice {
+    color: #999;
+    font-size: 13px;
   }
 
   .loading-placeholder {
