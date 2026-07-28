@@ -18,11 +18,11 @@ function makePost(id: string, overrides: Partial<VelogPost> = {}): VelogPost {
 }
 
 describe("groupByTag", () => {
-  it("태그별로 게시글을 묶고 조회수/좋아요/댓글수 합계를 계산한다", () => {
+  it("태그별로 게시글을 묶고 조회수 합계/평균을 계산한다", () => {
     const posts = [
-      makePost("p1", { tags: ["React"], likes: 3, comments_count: 1 }),
-      makePost("p2", { tags: ["React"], likes: 5, comments_count: 2 }),
-      makePost("p3", { tags: ["TypeScript"], likes: 1, comments_count: 0 }),
+      makePost("p1", { tags: ["React"] }),
+      makePost("p2", { tags: ["React"] }),
+      makePost("p3", { tags: ["TypeScript"] }),
     ];
     const viewsByPostId = new Map([
       ["p1", 10],
@@ -37,8 +37,6 @@ describe("groupByTag", () => {
       postCount: 2,
       totalViews: 30,
       averageViews: 15,
-      totalLikes: 8,
-      totalComments: 3,
       viewsLoaded: true,
     });
 
@@ -47,26 +45,18 @@ describe("groupByTag", () => {
       postCount: 1,
       totalViews: 7,
       averageViews: 7,
-      totalLikes: 1,
-      totalComments: 0,
     });
   });
 
   it("한 게시글에 태그가 여러 개면 각 태그 그룹에 전체 값을 중복 반영한다", () => {
-    const posts = [makePost("p1", { tags: ["React", "Frontend"], likes: 4, comments_count: 2 })];
+    const posts = [makePost("p1", { tags: ["React", "Frontend"] })];
     const viewsByPostId = new Map([["p1", 100]]);
 
     const result = groupByTag(posts, viewsByPostId);
 
     expect(result).toHaveLength(2);
     for (const tagStats of result) {
-      expect(tagStats).toMatchObject({
-        postCount: 1,
-        totalViews: 100,
-        averageViews: 100,
-        totalLikes: 4,
-        totalComments: 2,
-      });
+      expect(tagStats).toMatchObject({ postCount: 1, totalViews: 100, averageViews: 100 });
     }
   });
 

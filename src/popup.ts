@@ -313,6 +313,6 @@ function createTagStatsRow(stats: TagStats): RowElements {
 function updateTagStatsRow(elements: RowElements, stats: TagStats): void {
   elements.statsSpan.className = stats.viewsLoaded ? "stats-value" : "stats-value loading";
   elements.statsSpan.textContent = stats.viewsLoaded
-    ? `총 ${stats.totalViews}회 · 평균 ${stats.averageViews.toFixed(1)}회 · 좋아요 ${stats.totalLikes}개 · 댓글 ${stats.totalComments}개`
+    ? `총 ${stats.totalViews}회 · 평균 ${stats.averageViews.toFixed(1)}회`
     : "조회수 불러오는 중";
 }
