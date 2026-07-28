@@ -66,6 +66,9 @@ jobs:
               }),
             );
 
+      - name: Generate traffic stats card
+        run: node scripts/generate-traffic-stats.mjs
+
       - name: Commit updated traffic data
         run: |
           git config user.name "github-actions[bot]"
