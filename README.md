@@ -2,6 +2,8 @@
 
 Velog에 작성한 게시글의 조회수를 **시리즈별로 집계**해서 보여주는 Chrome 확장 프로그램입니다.
 
+**[Chrome 웹 스토어에서 설치하기](https://chromewebstore.google.com/detail/velog-series-stats/cngiicdbaonkhdidoabdnbehnoihomlg)**
+
 ## 목적
 
 Velog는 게시글별 조회수는 확인할 수 있지만, 시리즈 단위로 묶어서 총 조회수나 평균 조회수를 보여주는 기능은 제공하지 않습니다. 이 확장 프로그램은 로그인한 사용자의 게시글 목록과 조회수 데이터를 가져와 시리즈별로 그룹화하고, 시리즈별 총조회수·평균 조회수를 팝업 화면에 보여주는 것을 목표로 합니다.
